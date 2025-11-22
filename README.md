@@ -4,8 +4,11 @@ A Security Operations Centre (SOC) is a collection of personnel, procedures, and
 In this report, the SOC context is explored through the Boss of the SOC v3 (BOTSv3) dataset, a simulated enterprise environment for the fictitious company “Frothly” that provides realistic AWS, endpoint, and network activity that mirrors enterprise operations. Using Splunk to analyze BOTSv3, this investigation models real SOC workflows such as querying CloudTrail logs, identifying misconfigurations and analyzing attacker behavior.
 
 The objectives of this investigation are:
+
 •	Answering one set of 200-level questions.
+
 •	Reconstructing the incident from a SOC perspective.
+
 •	Reflecting on SOC processes / improvement.
 
 ## References
