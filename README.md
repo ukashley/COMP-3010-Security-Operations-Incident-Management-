@@ -24,8 +24,6 @@ The BOTSv3 dataset is related to and accurately represents the different SOC tie
 
 • **Tier 3 (Threat Hunter):** Tier 3 analysts are the most experienced personnel in a SOC. They mainly proactively look for unknown threats and review security data provided by tiers 1 and 2 for any vulnerabilities or gaps. In relation to the BOTSv3 exercise, an incident responder might escalate the PutBucketAcl event and Bud’s username to a threat hunter, who then pivots into S3 access logs to determine which file was uploaded while the bucket was public and assess the impact. Likewise, using winhostmon data to spot a single host running a different Windows edition reflects hunting for outliers that may indicate misconfiguration or attacker activity. These Tier 3 activities span the response and recovery phases, and also support prevention by informing improved detections and hardening measures.
 
-Overall, the BOTSv3 exercise shows an effective escalation from Tier 1 to Tier 3, but it relies heavily on manual searches rather than automated alerts or playbooks. In a real SOC, I would strengthen alerting around S3 ACL changes and MFA, implement stricter access controls and use standardized dashboards to speed investigations.
-
 ## 3. Installation & Data Preparation 
 
 
@@ -69,13 +67,7 @@ web_admin
 
 **e) Interpretation**
 
-The dataset shows four IAM users generating CloudTrail events, the first two (`bstoll`,`btun`) look like human users, `splunk_access` is likely a service account, and `web_admin` suggests a privileged/shared admin account. A SOC analyst often relies on user-profiling and behavioural features to distinguish normal from suspicious activity, so these four IAM users would each get their own behavioural baseline before deciding whether their actions look risky (Akinrolabu et al. 2018).
-
----
-
-**f) Cross-reference and reflection**
-
-These four users become pivots for later questions, such as S3 bucket ACL changes or object uploads. A SOC would restrict searches to these identities to reduce noise and spot malicious actions faster. 
+The dataset shows four IAM users generating CloudTrail events, the first two (`bstoll`,`btun`) look like human users, `splunk_access` is likely a service account, and `web_admin` suggests a privileged/shared admin account. A SOC analyst often relies on user-profiling and behavioural features to distinguish normal from suspicious activity, so these four IAM users would each get their own behavioural baseline before deciding whether their actions look risky (Akinrolabu et al. 2018). These four users become pivots for later questions, such as S3 bucket ACL changes or object uploads. A SOC would restrict searches to these identities to reduce noise and spot malicious actions faster. 
 
 ### Q2 – Field to alert that AWS API activity occured without MFA
 
@@ -98,28 +90,102 @@ index=botsv3 sourcetype="aws:cloudtrail" *mfa* NOT "ConsoleLogin"
 
 ---
 
+Then, in the Events view, I expanded userIdentity > sessionContext > attributes and saw the field mfaAuthenticated, which shows whether MFA was used with true/false.
+<img width="975" height="405" alt="image" src="https://github.com/user-attachments/assets/6343ef83-1253-40ee-b106-99c1c7ffe941" />
+
+
 **d) Output**
 
-```text
-bstoll
-btun
-splunk_access
-web_admin
+```spl
+index=botsv3 sourcetype="aws:cloudtrail" *mfa* NOT "ConsoleLogin"
+| table userIdentity.sessionContext.attributes.mfaAuthenticated, eventName, userIdentity.userName
 ```
 
-<img width="975" height="376" alt="image" src="https://github.com/user-attachments/assets/1ea03715-7cd8-4c46-911e-1271704392c6" />
+<img width="975" height="524" alt="image" src="https://github.com/user-attachments/assets/64ed8342-ba9f-49d0-9c8a-aeeb97d9d9f3" />
 
 ---
 
 **e) Interpretation**
 
-The dataset shows four IAM users generating CloudTrail events, the first two (bstoll,btun) look like human users, `splunk_access` is likely a service account, and `web_admin` suggests a privileged/shared admin account. A SOC analyst often relies on user-profiling and behavioural features to distinguish normal from suspicious activity, so these four IAM users would each get their own behavioural baseline before deciding whether their actions look risky (Akinrolabu et al. 2018).
+For a SOC, this is important because identifying userIdentity.sessionContext.attributes.mfaAuthenticated lets them utilise the MFA policy in CloudTrail by clearly differentiating strongly authenticated activity (true) from higher-risk sessions (false). Analysts can alert on sensitive API calls made without MFA and, during investigations, quickly pivot to those calls to spot possible account compromise and check whether MFA controls are actually being followed.
+
+### Q3 – The processor number used on the web servers
+
+**a) Answer**
+
+E5-2676
+
+**b) Question Description**
+
+This question uses available hardware information in the dataset to identify the processor number used on the web servers. For a SOC, this falls at the first part of security incident handling, where a triage specialist can easily check hosts' hardware details to locate the processor number and assets that were affected if any.
+
+**c) Method used**
+
+Used the botsV3 data and “hardware” as the source type to begin the search
+
+```spl
+index=botsv3 sourcetype="hardware" 
+```
+<img width="975" height="516" alt="image" src="https://github.com/user-attachments/assets/91465de6-1b07-4698-aef0-ef8bef2950e9" />
 
 ---
 
-**f) Cross-reference and reflection**
+A closer look at the first displayed event showed the processor number used on the web servers. 
+<img width="975" height="256" alt="image" src="https://github.com/user-attachments/assets/28fb537d-8879-43b5-bcef-9570a76ed090" />
 
-These four users become pivots for later questions, such as S3 bucket ACL changes or object uploads. A SOC would restrict searches to these identities to reduce noise and spot malicious actions faster. 
+---
+
+To confirm that the host hosts web servers, I used the search filter below and the results (Using  stream:http and has the server: Apache/2.2.34 (Amazon)) confirmed it does:
+```spl
+index=botsv3 host="gacrux.i-09cbc261e84259b54"
+```
+<img width="975" height="759" alt="image" src="https://github.com/user-attachments/assets/7371bec0-bb6e-4dd9-b2b8-9afc91f7d542" />
+
+---
+
+**d) Interpretation**
+
+For a SOC, this is important because device identification and tracking in security incidents and forensic investigations can be gotten from identifying the processor number. This unique, factory-assigned identifier aids in distinguishing a specific physical CPU from all others in the same series. Tier 1 analysts can alert on suspicious devices and trace back odd logs during investigations with the knowledge of this number. 
+
+### Q4 – The event ID of the API call that enabled public access
+
+**a) Answer**
+
+ab45689d-69cd-41e7-8705-5350402cf7ac
+
+**b) Question Description**
+
+This question uses AWS CloudTrail logs to identify the event ID of the accidental API call made by Bud that enabled public access to an S3 bucket. For a SOC, this falls within the detection and analysis part of the security incident handling lifecycle, where data monitoring decides if an event is a security incident. An API call made without MFA can be treated as a potential indicator of compromise and would typically be handled by an incident responder in line with the organization’s security incident handling and response process (Agbede 2023). 
+
+**c) Method used**
+
+I searched the BOTSv3 CloudTrail data for MFA-related API calls, excluding console logins 
+
+```spl
+index=botsv3 sourcetype="aws:cloudtrail" *mfa* NOT "ConsoleLogin"
+```
+<img width="975" height="513" alt="image" src="https://github.com/user-attachments/assets/d72a6bfd-f6ef-400a-84e0-1fd54dea240a" />
+
+---
+
+Then, in the Events view, I expanded userIdentity > sessionContext > attributes and saw the field mfaAuthenticated, which shows whether MFA was used with true/false.
+<img width="975" height="405" alt="image" src="https://github.com/user-attachments/assets/6343ef83-1253-40ee-b106-99c1c7ffe941" />
+
+
+**d) Output**
+
+```spl
+index=botsv3 sourcetype="aws:cloudtrail" *mfa* NOT "ConsoleLogin"
+| table userIdentity.sessionContext.attributes.mfaAuthenticated, eventName, userIdentity.userName
+```
+
+<img width="975" height="524" alt="image" src="https://github.com/user-attachments/assets/64ed8342-ba9f-49d0-9c8a-aeeb97d9d9f3" />
+
+---
+
+**e) Interpretation**
+
+For a SOC, this is important because identifying userIdentity.sessionContext.attributes.mfaAuthenticated lets them utilise the MFA policy in CloudTrail by clearly differentiating strongly authenticated activity (true) from higher-risk sessions (false). Analysts can alert on sensitive API calls made without MFA and, during investigations, quickly pivot to those calls to spot possible account compromise and check whether MFA controls are actually being followed.
 
 ## References
 1. Vielberth, M., Böhm, F., Fichtinger, I. and Pernul, G., 2020. Security operations center: A systematic study and open challenges. Ieee Access, 8, pp.227756-227779.
