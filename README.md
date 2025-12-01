@@ -26,5 +26,45 @@ The BOTSv3 dataset is related to and accurately represents the different SOC tie
 
 Overall, the BOTSv3 exercise shows an effective escalation from Tier 1 to Tier 3, but it relies heavily on manual searches rather than automated alerts or playbooks. In a real SOC, I would strengthen alerting around S3 ACL changes and MFA, implement stricter access controls and use standardized dashboards to speed investigations.
 
+## Installation & Data Preparation 
+
+
+## Guided Questions
+### Q1 – IAM users that accessed AWS services
+
+**a) Question Description**
+
+This question uses AWS CloudTrail logs to identify which IAM users are calling AWS APIs in the environment. For a SOC, this is basic identity monitoring: knowing which accounts are active is key to spotting compromised users and misuse of privileges. It sits in the Detection and Investigation stages of the incident lifecycle. 
+
+The AWS documentation shows that the IAM user who performed an action is stored in the userIdentity.userName field when userIdentity.type="IAMUser" (docs.aws.amazon.com. n.d.). 
+<img width="975" height="379" alt="image" src="https://github.com/user-attachments/assets/22fc0b4f-7081-4f26-bd6b-eeadd4212920" />
+
+**b) SPL query used**
+
+With the BOTSv3 data, I used stats values() to get the distinct IAM user names
+
+```spl
+index=botsv3 sourcetype="aws:cloudtrail"
+| stats values(userIdentity.userName) AS iam_users
+```
+
+---
+
+**c) Output**
+
+```text
+bstoll
+btun
+splunk_access
+web_admin
+```
+
+<img width="975" height="376" alt="image" src="https://github.com/user-attachments/assets/1ea03715-7cd8-4c46-911e-1271704392c6" />
+
+---
+
+
+
 ## References
-Vielberth, M., Böhm, F., Fichtinger, I. and Pernul, G. (2020) Security operations center: A systematic study and open challenges. Ieee Access, 8, pp.227756-227779.
+1. Vielberth, M., Böhm, F., Fichtinger, I. and Pernul, G., 2020. Security operations center: A systematic study and open challenges. Ieee Access, 8, pp.227756-227779.
+2. docs.aws.amazon.com. (n.d.). CloudTrail log file examples - AWS CloudTrail. [online] Available at: https://docs.aws.amazon.com/awscloudtrail/latest/userguide/cloudtrail-log-file-examples.html.
