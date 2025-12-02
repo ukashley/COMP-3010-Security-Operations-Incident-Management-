@@ -34,7 +34,7 @@ The BOTSv3 dataset is related to and accurately represents the different SOC tie
 
 bstoll,btun,splunk_access,web_admin
 
-**b) Question Description**
+**b) Description**
 
 This question uses AWS CloudTrail logs to identify which IAM users are calling AWS APIs in the environment. For a SOC, this is basic identity monitoring: knowing which accounts are active is key to spotting compromised users and misuse of privileges. It sits in the detection stages of the incident lifecycle and aligns with research showing that SOCs need to correlate identity and activity data over time to spot sophisticated multi-stage attacks, rather than looking at isolated events alone (Akinrolabu et al. 2018). 
 
@@ -75,7 +75,7 @@ The dataset shows four IAM users generating CloudTrail events, the first two (`b
 
 userIdentity.sessionContext.attributes.mfaAuthenticated
 
-**b) Question Description**
+**b) Description**
 
 This question uses AWS CloudTrail logs to identify the full JSON path of the field that indicates AWS API activity occurred without MFA. For a SOC, this falls within the detection and analysis part of the security incident handling lifecycle, where data monitoring decides if an event is a security incident. An API call made without MFA can be treated as a potential indicator of compromise and would typically be handled by an incident responder in line with the organization’s security incident handling and response process (Agbede 2023). 
 
@@ -115,7 +115,7 @@ For a SOC, this is important because identifying userIdentity.sessionContext.att
 
 E5-2676
 
-**b) Question Description**
+**b) Description**
 
 This question uses available hardware information in the dataset to identify the processor number used on the web servers. For a SOC, this falls at the first part of security incident handling, where a triage specialist can easily check hosts' hardware details to locate the processor number and assets that were affected if any.
 
@@ -153,43 +153,42 @@ For a SOC, this is important because device identification and tracking in secur
 
 ab45689d-69cd-41e7-8705-5350402cf7ac
 
-**b) Question Description**
+**b) Description**
 
-This question uses AWS CloudTrail logs to identify the event ID of the accidental API call made by Bud that enabled public access to an S3 bucket. For a SOC, this falls within the detection and analysis part of the security incident handling lifecycle, where data monitoring decides if an event is a security incident. An API call made without MFA can be treated as a potential indicator of compromise and would typically be handled by an incident responder in line with the organization’s security incident handling and response process (Agbede 2023). 
+This question uses AWS CloudTrail logs to identify the event ID of the accidental API call made by Bud that enabled public access to an S3 bucket. CloudTrail records each change with an eventID, user, time, and request parameters (Amazon.com, 2025). For a SOC, identifying this event is key to understanding who made the change, when it happened, and what level of access was granted.
 
 **c) Method used**
 
-I searched the BOTSv3 CloudTrail data for MFA-related API calls, excluding console logins 
+To find the event ID, I searched for events with the name “PutBucketAcl” and this returned two events
 
 ```spl
-index=botsv3 sourcetype="aws:cloudtrail" *mfa* NOT "ConsoleLogin"
+index=botsv3 sourcetype="aws:cloudtrail" eventName="PutBucketAcl"
 ```
-<img width="975" height="513" alt="image" src="https://github.com/user-attachments/assets/d72a6bfd-f6ef-400a-84e0-1fd54dea240a" />
+<img width="975" height="517" alt="image" src="https://github.com/user-attachments/assets/0644775c-9e5a-48be-809f-ff451482cd43" />
 
 ---
 
-Then, in the Events view, I expanded userIdentity > sessionContext > attributes and saw the field mfaAuthenticated, which shows whether MFA was used with true/false.
-<img width="975" height="405" alt="image" src="https://github.com/user-attachments/assets/6343ef83-1253-40ee-b106-99c1c7ffe941" />
+To narrow it down to the event ID of the API call that gave access to all users. I used this search filter:
 
+```spl
+index=botsv3 sourcetype="aws:cloudtrail" eventName="PutBucketAcl" AllUsers
+```
+
+---
 
 **d) Output**
 
-```spl
-index=botsv3 sourcetype="aws:cloudtrail" *mfa* NOT "ConsoleLogin"
-| table userIdentity.sessionContext.attributes.mfaAuthenticated, eventName, userIdentity.userName
-```
-
-<img width="975" height="524" alt="image" src="https://github.com/user-attachments/assets/64ed8342-ba9f-49d0-9c8a-aeeb97d9d9f3" />
-
----
+From this filtered result, I inspected the event fields and identified the specific eventID associated with Bud’s public ACL change:
+<img width="975" height="849" alt="image" src="https://github.com/user-attachments/assets/dd8c1e31-f090-49d6-bc84-0d4dfce14a8e" />
 
 **e) Interpretation**
 
-For a SOC, this is important because identifying userIdentity.sessionContext.attributes.mfaAuthenticated lets them utilise the MFA policy in CloudTrail by clearly differentiating strongly authenticated activity (true) from higher-risk sessions (false). Analysts can alert on sensitive API calls made without MFA and, during investigations, quickly pivot to those calls to spot possible account compromise and check whether MFA controls are actually being followed.
+This eventID records the precise moment Bud’s IAM user made the S3 bucket public to AllUsers. For a SOC analyst, it's a crucial point because it indicates when exposure started, who caused it, and allows you to look for any external access in follow-up logs (Farris, 2022). It also emphasizes the need for alerts and safeguards against dangerous ACL modifications.
 
 ## References
 1. Vielberth, M., Böhm, F., Fichtinger, I. and Pernul, G., 2020. Security operations center: A systematic study and open challenges. Ieee Access, 8, pp.227756-227779.
 2. docs.aws.amazon.com. (n.d.). CloudTrail log file examples - AWS CloudTrail. [online] Available at: https://docs.aws.amazon.com/awscloudtrail/latest/userguide/cloudtrail-log-file-examples.html.
 3. Akinrolabu, O., Agrafiotis, I. and Erola, A. (2018) 'The challenge of detecting sophisticated attacks: Insights from SOC Analysts'. In Proceedings of the 13th international conference on availability, reliability and security (pp. 1-9).
 4. Agbede, O.M. (2023) Incident Handling and Response Process in Security Operations.
-5. 
+5. Amazon.com. (2025). CloudTrail record contents for management, data, and network activity events - AWS CloudTrail. [online] Available at: http://docs.aws.amazon.com/awscloudtrail/latest/userguide/cloudtrail-event-reference-record-contents.html.
+6. Farris, C. (2022). Incident Response in AWS. [online] Available at: https://www.chrisfarris.com/post/aws-ir/ [Accessed 2 Dec. 2025].
