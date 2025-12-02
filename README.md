@@ -185,6 +185,167 @@ From this filtered result, I inspected the event fields and identified the speci
 
 This eventID records the precise moment Bud’s IAM user made the S3 bucket public to AllUsers. For a SOC analyst, it's a crucial point because it indicates when exposure started, who caused it, and allows you to look for any external access in follow-up logs (Farris, 2022). It also emphasizes the need for alerts and safeguards against dangerous ACL modifications.
 
+### Q5 – Bud's Username
+
+**a) Answer**
+
+bstoll
+
+**b) Description**
+
+This question uses AWS CloudTrail logs to identify Bud's username. CloudTrail records each change with an eventID, user, time, and request parameters (Amazon.com, 2025). For a SOC, identifying the username is key to understanding who made the change, when it happened, and what level of access was granted.
+
+**c) Method used**
+
+Expansion of the userIdentity from the PutBucketAcl event revealed Bud’s username.
+
+```spl
+index=botsv3 sourcetype="aws:cloudtrail" eventName="PutBucketAcl"
+```
+---
+
+**d) Output**
+
+The expansion clearly shows Bud's username:
+<img width="802" height="827" alt="image" src="https://github.com/user-attachments/assets/0d421d5b-a23a-456d-a4f5-95ee02003d50" />
+
+**e) Interpretation**
+
+This username records the exact IAM user that made the S3 bucket public to AllUsers. For a SOC analyst, it's a crucial point because it indicates who caused it and allows you to look for any external access in follow-up logs (Farris, 2022). It also emphasizes the need for alerts and safeguards against dangerous ACL modifications.
+
+### Q6 – Name of the public S3 bucket
+
+**a) Answer**
+
+frothlywebcode
+
+**b) Description**
+
+This question uses AWS CloudTrail logs to identify the name of the S3 bucket that Bud made publicly accessible. CloudTrail records each change with an eventID, user, time, and request parameters (Amazon.com, 2025). For a SOC, identifying the bucket name is key to understanding what changed, if anyone altered it, and what level of access was granted.
+
+**c) Method used**
+
+Expansion of the requestParameters from the PutBucketAcl event revealed the name of the S3 bucket that was made publicly accessible.
+
+```spl
+index=botsv3 sourcetype="aws:cloudtrail" eventName="PutBucketAcl"
+```
+---
+
+**d) Output**
+
+The expansion clearly shows the S3 bucket name:
+<img width="875" height="597" alt="image" src="https://github.com/user-attachments/assets/a0d254bd-31fd-4e62-8c0b-868540b75484" />
+
+**e) Interpretation**
+
+The bucket name records the exact S3 bucket that was made public to AllUsers. For a SOC analyst, it's an important point because it indicates what asset was affected and allows you to look for any external access in follow-up logs (Farris, 2022). It also emphasizes the need for alerts and safeguards against dangerous ACL modifications.
+
+### Q7 – The text file uploaded to the S3 bucket
+
+**a) Answer**
+
+OPEN_BUCKET_PLEASE_FIX.txt 
+
+**b) Description**
+
+This question uses AWS S3 Access logs to identify the text file uploaded to the S3 bucket. After an incident responder escalates the PutBucketAcl event and Bud’s username , the threat hunter can pivot into S3 access logs to see exactly which objects were written while the bucket was public and assess the impact on confidentiality and integrity.
+
+**c) Method used**
+
+I applied the filter below with the S3 bucket name included:
+
+```spl
+index=botsv3 sourcetype=" aws:s3:accesslogs" frothlywebcode
+```
+<img width="975" height="492" alt="image" src="https://github.com/user-attachments/assets/d0168360-7e59-43a7-9dc7-26830d1dce00" />
+
+---
+
+I noticed that the events in the picture above all had request parameters e.g. GET, HEAD, PUT etc. so to isolate the PutObject requests I applied this filter, and it narrowed it down to four events:
+
+```spl
+index="botsv3" sourcetype="aws:s3:accesslogs" frothlywebcode "REST.PUT.OBJECT"
+```
+<img width="975" height="511" alt="image" src="https://github.com/user-attachments/assets/c4f4f9bd-5bb9-4dfb-b1c2-6362540af950" />
+
+---
+
+To find the .txt object, I applied this filter:
+```spl
+index="botsv3" sourcetype="aws:s3:accesslogs" frothlywebcode "REST.PUT.OBJECT" .txt
+```
+
+---
+
+**d) Output**
+
+From the addition of ".txt" to the filtered result, I identified the text file uploaded to the S3 bucket:  
+<img width="975" height="412" alt="image" src="https://github.com/user-attachments/assets/e4338c58-d8d5-47a2-a2e4-434c5d225f65" />
+
+**e) Interpretation**
+
+Identifying `OPEN_BUCKET_PLEASE_FIX.txt` shows the direct impact of Bud’s risky S3 ACL change. S3 server access logs' request and object information are correlated with the `PutBucketAcl` event with `REST.PUT.OBJECT` entries in `aws:s3:accesslogs` to verify what was uploaded, when it occurred, and to identify malicious or warning files during the exposure window (Amazon Web Services, 2023).
+
+### Q8 – FQDN of the endpoint that is running a different Windows operating system edition
+
+**a) Answer**
+
+BSTOLL-L.froth.ly
+
+**b) Description**
+
+This question uses Windows host inventory data (winhostmon) to compare OS editions across endpoints and find the one workstation whose Windows edition differs from the standard Frothly baseline, identified via its FQDN. In a SOC context, comparing fields such as OS edition and FQDN across all hosts, allows the analyst to quickly spot outliers that may represent unmanaged, misconfigured, or higher-risk machines.
+
+**c) Method used**
+
+I used this filter to start, and it returned 204 events: 
+
+```spl
+index="botsv3" sourcetype="winhostmon" "windows 10"
+```
+<img width="975" height="825" alt="image" src="https://github.com/user-attachments/assets/fe373b17-6b4c-4c49-963d-fe18eb8ba282" />
+
+---
+
+I noticed that there were 2 different OSs which are Windows 10 Pro and Windows 10 Enterprise. Most of the events with Microsoft 10 Pro had different host names but Microsoft 10 Enterprise only had one host name:
+<img width="975" height="941" alt="image" src="https://github.com/user-attachments/assets/e69c5b22-d5cf-44ff-b5ed-5240ce9e5b26" />
+
+---
+
+So, I used this filter to isolate hosts using Windows 10 Enterprise and looking through the 30 returned events, I confirmed that there was only one host name which is BSTOLL-L:
+```spl
+index="botsv3" sourcetype="winhostmon" "windows 10 Enterprise"
+```
+<img width="975" height="1131" alt="image" src="https://github.com/user-attachments/assets/b1e7c424-b0c5-4cc2-82bd-90e8e4dfc02a" />
+
+---
+
+To get final confirmation, I used the filter below to see the number of events it would return, and it returned 174 (174+30 = 204):
+```spl
+index="botsv3" sourcetype="winhostmon" "windows 10 Pro"
+```
+<img width="975" height="826" alt="image" src="https://github.com/user-attachments/assets/4da450a9-4923-44b4-8c00-5e541ed591d6" />
+
+---
+
+After identifying BSTOLL-L as the only host running Windows 10 Enterprise, I pivoted on that hostname across all data in index=botsv3.
+Using this filter: 
+```spl
+index="botsv3" BSTOLL-L | stats count by sourcetype source
+```
+<img width="975" height="582" alt="image" src="https://github.com/user-attachments/assets/a187788c-524c-4e57-823b-b778d64b902d" />
+
+
+**d) Output**
+
+After the result of that filter, I pivoted into the cisconvmsysdata source, which contains VM/system metadata including OS edition (ose) and full system names (vsn) and clicking view events showed the FQDN:
+<img width="975" height="464" alt="image" src="https://github.com/user-attachments/assets/57e612d1-ecfe-4aae-bf03-f837b0a8f587" />
+
+**e) Interpretation**
+
+Finding BSTOLL-L.froth.ly as the only host with a different Windows edition highlights a non-standard build that may miss expected security controls or policies. In a SOC context, this endpoint should be treated as an exception, investigated, and brought into alignment or given additional monitoring
+
 ## References
 1. Vielberth, M., Böhm, F., Fichtinger, I. and Pernul, G., 2020. Security operations center: A systematic study and open challenges. Ieee Access, 8, pp.227756-227779.
 2. docs.aws.amazon.com. (n.d.). CloudTrail log file examples - AWS CloudTrail. [online] Available at: https://docs.aws.amazon.com/awscloudtrail/latest/userguide/cloudtrail-log-file-examples.html.
@@ -192,3 +353,4 @@ This eventID records the precise moment Bud’s IAM user made the S3 bucket publ
 4. Agbede, O.M. (2023) Incident Handling and Response Process in Security Operations.
 5. Amazon.com. (2025). CloudTrail record contents for management, data, and network activity events - AWS CloudTrail. [online] Available at: http://docs.aws.amazon.com/awscloudtrail/latest/userguide/cloudtrail-event-reference-record-contents.html.
 6. Farris, C. (2022). Incident Response in AWS. [online] Available at: https://www.chrisfarris.com/post/aws-ir/ [Accessed 2 Dec. 2025].
+7. Amazon Web Services (2023) Logging requests using server access logging - Amazon Simple Storage Service. [online] Available at: https://docs.aws.amazon.com/AmazonS3/latest/userguide/ServerLogs.html.
