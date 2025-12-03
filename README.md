@@ -18,11 +18,11 @@ This investigation assumes the following: The BOTSv3 logs are complete, accurate
 ## 2. SOC Roles & Incident Handling Reflection
 The BOTSv3 dataset is related to and accurately represents the different SOC tiers, their roles and incident handling methods. The typical SOC is divided into three main tiers:
 
-• **Tier 1 (Triage Specialist):** Tier 1 analysts focus on monitoring alarms and alerts, removing false positives, and obtaining basic context to promptly escalate critical incidents (Vielberth et al 2020). In the BOTSv3 dataset, identifying the IAM users accessing AWS services and finding the processor number used on the web servers mirrors this role. For example, a Tier 1 analyst could run a straightforward CloudTrail search to list IAM users involved in suspicious activity and check host hardware details to understand which assets are affected during triage. These Tier 1 activities mostly fall within the detection phase, with some contribution to response, as they provide the first validated view of what is happening before escalation.
+• **Tier 1 (Triage Specialist):** Tier 1 analysts monitor alerts, filter false positives and gather initial context so serious events can be escalated quickly (Vielberth et al. 2020). In BOTSv3, tasks such as listing IAM users accessing AWS services or identifying the processor type on web servers mirror this triage work. CloudTrail and host searches help establish who is involved and which assets are affected, supporting early detection and quick containment decisions.
 
-• **Tier 2 (Incident Responder):**  At Tier 2, analysts review higher-severity incidents escalated by triage specialists, perform deeper investigation, and are responsible for developing and implementing strategies to contain and recover from an incident (Vielberth et al 2020). In the BOTSv3 exercise, this is reflected in tasks such as identifying the field used to alert on AWS API activity without MFA, tracing the event ID of the PutBucketAcl call, and attributing it to Bud’s username. Tier 2 analysts interpret and correlate the raw data collected at Tier 1, turning it into functional threat intelligence (for example, using “AWS API activity without MFA” as an indicator of compromise and tying it to a specific user and bucket). These activities sit across the detection and response phases, as Tier 2 both refines what the incident actually is and drives containment actions. If the incident responder encounters significant complexity, the case is escalated to Tier 3.
+• **Tier 2 (Incident Responder):** Tier 2 analysts handle escalated cases, perform deeper investigation and coordinate containment and incident recovery (Vielberth et al 2020). This appears in questions on identifying the field used to alert on AWS API activity without MFA, tracing the PutBucketAcl event ID and linking it to Bud’s account and bucket. Here, Tier 2 correlates Tier 1 findings into actionable threat intelligence and decides concrete response steps, such as tightening bucket ACLs or enforcing MFA.
 
-• **Tier 3 (Threat Hunter):** Tier 3 analysts are the most experienced personnel in a SOC. They mainly proactively look for unknown threats and review security data provided by tiers 1 and 2 for any vulnerabilities or gaps. In relation to the BOTSv3 exercise, an incident responder might escalate the PutBucketAcl event and Bud’s username to a threat hunter, who then pivots into S3 access logs to determine which file was uploaded while the bucket was public and assess the impact. Likewise, using winhostmon data to spot a single host running a different Windows edition reflects hunting for outliers that may indicate misconfiguration or attacker activity. These Tier 3 activities span the response and recovery phases, and also support prevention by informing improved detections and hardening measures.
+• **Tier 3 (Threat Hunter):** Tier 3 analysts proactively hunt for unknown threats and drive long-term prevention. In BOTSv3 they might pivot from the PutBucketAcl event into S3 access logs to see which file was uploaded while the bucket was public and use winhostmon data to spot a host running a different Windows edition as a suspicious outlier. These activities inform hardening and improved detections, though BOTSv3 underrepresents non-technical recovery work such as stakeholder communication and post-incident reviews.
 
 ## 3. Installation & Data Preparation 
 
@@ -34,25 +34,21 @@ The BOTSv3 dataset is related to and accurately represents the different SOC tie
 
 bstoll,btun,splunk_access,web_admin
 
-**b) Description**
-
-This question uses AWS CloudTrail logs to identify which IAM users are calling AWS APIs in the environment. For a SOC, this is basic identity monitoring: knowing which accounts are active is key to spotting compromised users and misuse of privileges. It sits in the detection stages of the incident lifecycle and aligns with research showing that SOCs need to correlate identity and activity data over time to spot sophisticated multi-stage attacks, rather than looking at isolated events alone (Akinrolabu et al. 2018). 
+**b) Explanation**
 
 The AWS documentation shows that the IAM user who performed an action is stored in the userIdentity.userName field when userIdentity.type="IAMUser" (docs.aws.amazon.com. n.d.). 
 <img width="975" height="379" alt="image" src="https://github.com/user-attachments/assets/22fc0b4f-7081-4f26-bd6b-eeadd4212920" />
 
-**c) Method used**
-
-With the BOTSv3 data, I used stats values() to get the distinct IAM usernames
+To identify which IAM users generated AWS API events, I queried the CloudTrail data:
 
 ```spl
 index=botsv3 sourcetype="aws:cloudtrail"
 | stats values(userIdentity.userName) AS iam_users
 ```
 
----
+This returned four IAM users: two that appear to be human users (bstoll, btun), one likely service account (splunk_access), and one shared/privileged account (web_admin).
 
-**d) Output**
+---
 
 ```text
 bstoll
@@ -65,9 +61,7 @@ web_admin
 
 ---
 
-**e) Interpretation**
-
-The dataset shows four IAM users generating CloudTrail events, the first two (`bstoll`,`btun`) look like human users, `splunk_access` is likely a service account, and `web_admin` suggests a privileged/shared admin account. A SOC analyst often relies on user-profiling and behavioural features to distinguish normal from suspicious activity, so these four IAM users would each get their own behavioural baseline before deciding whether their actions look risky (Akinrolabu et al. 2018). These four users become pivots for later questions, such as S3 bucket ACL changes or object uploads. A SOC would restrict searches to these identities to reduce noise and spot malicious actions faster. 
+For a SOC, this is basic identity monitoring: it defines the set of active IAM users in the environment and provides pivots for later investigations. Analysts can baseline each identity’s normal activity and then quickly focus searches (e.g., on these four users when reviewing S3 ACL changes or object uploads), reducing noise and making it easier to spot compromised accounts or misuse of privileges (Akinrolabu et al. 2018). 
 
 ### Q2 – Field to alert that AWS API activity occured without MFA
 
@@ -75,13 +69,9 @@ The dataset shows four IAM users generating CloudTrail events, the first two (`b
 
 userIdentity.sessionContext.attributes.mfaAuthenticated
 
-**b) Description**
+**b) Explanation**
 
-This question uses AWS CloudTrail logs to identify the full JSON path of the field that indicates AWS API activity occurred without MFA. For a SOC, this falls within the detection and analysis part of the security incident handling lifecycle, where data monitoring decides if an event is a security incident. An API call made without MFA can be treated as a potential indicator of compromise and would typically be handled by an incident responder in line with the organization’s security incident handling and response process (Agbede 2023). 
-
-**c) Method used**
-
-I searched the BOTSv3 CloudTrail data for MFA-related API calls, excluding console logins 
+Here the goal is to find the CloudTrail field that indicates whether MFA was used for an API call. I filtered CloudTrail events for MFA-related data while excluding console logins:
 
 ```spl
 index=botsv3 sourcetype="aws:cloudtrail" *mfa* NOT "ConsoleLogin"
@@ -90,24 +80,12 @@ index=botsv3 sourcetype="aws:cloudtrail" *mfa* NOT "ConsoleLogin"
 
 ---
 
-Then, in the Events view, I expanded userIdentity > sessionContext > attributes and saw the field mfaAuthenticated, which shows whether MFA was used with true/false.
+In the Events view, expanding userIdentity > sessionContext > attributes reveals the Boolean field mfaAuthenticated:
 <img width="975" height="405" alt="image" src="https://github.com/user-attachments/assets/6343ef83-1253-40ee-b106-99c1c7ffe941" />
-
-
-**d) Output**
-
-```spl
-index=botsv3 sourcetype="aws:cloudtrail" *mfa* NOT "ConsoleLogin"
-| table userIdentity.sessionContext.attributes.mfaAuthenticated, eventName, userIdentity.userName
-```
-
-<img width="975" height="524" alt="image" src="https://github.com/user-attachments/assets/64ed8342-ba9f-49d0-9c8a-aeeb97d9d9f3" />
 
 ---
 
-**e) Interpretation**
-
-For a SOC, this is important because identifying userIdentity.sessionContext.attributes.mfaAuthenticated lets them utilise the MFA policy in CloudTrail by clearly differentiating strongly authenticated activity (true) from higher-risk sessions (false). Analysts can alert on sensitive API calls made without MFA and, during investigations, quickly pivot to those calls to spot possible account compromise and check whether MFA controls are actually being followed.
+In a SOC, this field is critical for detection and analysis. It lets analysts distinguish strongly authenticated sessions (true) from higher-risk ones (false). Detection rules can alert on sensitive API calls made without MFA, and incident responders can pivot to “MFA = false” sessions when investigating suspected account compromise or testing whether MFA policies are actually being followed (Agbede 2023).
 
 ### Q3 – The processor number used on the web servers
 
@@ -115,13 +93,9 @@ For a SOC, this is important because identifying userIdentity.sessionContext.att
 
 E5-2676
 
-**b) Description**
+**b) Explanation**
 
-This question uses available hardware information in the dataset to identify the processor number used on the web servers. For a SOC, this falls at the first part of security incident handling, where a triage specialist can easily check hosts' hardware details to locate the processor number and assets that were affected if any.
-
-**c) Method used**
-
-Used the botsV3 data and “hardware” as the source type to begin the search
+This question uses available hardware information in the dataset to identify the processor number used on the web servers. I started with:
 
 ```spl
 index=botsv3 sourcetype="hardware" 
@@ -130,22 +104,21 @@ index=botsv3 sourcetype="hardware"
 
 ---
 
-A closer look at the first displayed event showed the processor number used on the web servers. 
+I then inspected events until I found CPU details, and they all included the same processor number, so I selected the first one:
 <img width="975" height="256" alt="image" src="https://github.com/user-attachments/assets/28fb537d-8879-43b5-bcef-9570a76ed090" />
 
 ---
 
-To confirm that the host hosts web servers, I used the search filter below and the results (Using  stream:http and has the server: Apache/2.2.34 (Amazon)) confirmed it does:
-```spl
+To confirm that this host was actually running web services, I pivoted on its host value:
+ ```spl
 index=botsv3 host="gacrux.i-09cbc261e84259b54"
 ```
+and saw HTTP traffic with a server header such as Apache/2.2.34 (Amazon), confirming it is a web server.
 <img width="975" height="759" alt="image" src="https://github.com/user-attachments/assets/7371bec0-bb6e-4dd9-b2b8-9afc91f7d542" />
 
 ---
 
-**d) Interpretation**
-
-For a SOC, this is important because device identification and tracking in security incidents and forensic investigations can be gotten from identifying the processor number. This unique, factory-assigned identifier aids in distinguishing a specific physical CPU from all others in the same series. Tier 1 analysts can alert on suspicious devices and trace back odd logs during investigations with the knowledge of this number. 
+For a SOC, this is important because device identification and tracking in security incidents and forensic investigations can be gotten from identifying the processor number. This unique, factory-assigned identifier aids in distinguishing a specific physical CPU from all others in the same series. Tier 1/2 analysts can pivot on this hardware profile when correlating logs, so investigations stay aligned with the correct physical infrastructure rather than just abstract hostnames.
 
 ### Q4 – The event ID of the API call that enabled public access
 
@@ -153,13 +126,9 @@ For a SOC, this is important because device identification and tracking in secur
 
 ab45689d-69cd-41e7-8705-5350402cf7ac
 
-**b) Description**
+**b) Explanation**
 
-This question uses AWS CloudTrail logs to identify the event ID of the accidental API call made by Bud that enabled public access to an S3 bucket. CloudTrail records each change with an eventID, user, time, and request parameters (Amazon.com, 2025). For a SOC, identifying this event is key to understanding who made the change, when it happened, and what level of access was granted.
-
-**c) Method used**
-
-To find the event ID, I searched for events with the name “PutBucketAcl” and this returned two events
+To find the event that made an S3 bucket public, I searched for S3 ACL changes in CloudTrail (Amazon.com, 2025):
 
 ```spl
 index=botsv3 sourcetype="aws:cloudtrail" eventName="PutBucketAcl"
@@ -173,17 +142,12 @@ To narrow it down to the event ID of the API call that gave access to all users.
 ```spl
 index=botsv3 sourcetype="aws:cloudtrail" eventName="PutBucketAcl" AllUsers
 ```
+Inspecting the event fields showed the specific eventID associated with Bud’s public ACL change:
+<img width="975" height="849" alt="image" src="https://github.com/user-attachments/assets/dd8c1e31-f090-49d6-bc84-0d4dfce14a8e" />
 
 ---
 
-**d) Output**
-
-From this filtered result, I inspected the event fields and identified the specific eventID associated with Bud’s public ACL change:
-<img width="975" height="849" alt="image" src="https://github.com/user-attachments/assets/dd8c1e31-f090-49d6-bc84-0d4dfce14a8e" />
-
-**e) Interpretation**
-
-This eventID records the precise moment Bud’s IAM user made the S3 bucket public to AllUsers. For a SOC analyst, it's a crucial point because it indicates when exposure started, who caused it, and allows you to look for any external access in follow-up logs (Farris, 2022). It also emphasizes the need for alerts and safeguards against dangerous ACL modifications.
+This eventID records the precise change that opened the S3 bucket to the public. For a SOC analyst, it's a crucial point because it indicates when exposure started, who caused it, and allows you to look for any external access in follow-up logs (Farris, 2022). It also emphasizes the need for alerts and safeguards against dangerous ACL modifications.
 
 ### Q5 – Bud's Username
 
@@ -191,27 +155,19 @@ This eventID records the precise moment Bud’s IAM user made the S3 bucket publ
 
 bstoll
 
-**b) Description**
+**b) Explanation**
 
-This question uses AWS CloudTrail logs to identify Bud's username. CloudTrail records each change with an eventID, user, time, and request parameters (Amazon.com, 2025). For a SOC, identifying the username is key to understanding who made the change, when it happened, and what level of access was granted.
-
-**c) Method used**
-
-Expansion of the userIdentity from the PutBucketAcl event revealed Bud’s username.
+Using the same PutBucketAcl event, I expanded the userIdentity field:
 
 ```spl
 index=botsv3 sourcetype="aws:cloudtrail" eventName="PutBucketAcl"
 ```
----
-
-**d) Output**
-
-The expansion clearly shows Bud's username:
+The userIdentity.userName field shows that Bud’s IAM username is bstoll:
 <img width="802" height="827" alt="image" src="https://github.com/user-attachments/assets/0d421d5b-a23a-456d-a4f5-95ee02003d50" />
 
-**e) Interpretation**
+---
 
-This username records the exact IAM user that made the S3 bucket public to AllUsers. For a SOC analyst, it's a crucial point because it indicates who caused it and allows you to look for any external access in follow-up logs (Farris, 2022). It also emphasizes the need for alerts and safeguards against dangerous ACL modifications.
+For incident handling, this ties the risky configuration change directly to an individual account. The SOC can then review bstoll’s recent activity (for example, all CloudTrail events for that user), check whether his access rights are appropriate, and, if needed, adjust permissions. This can also be mitigated by enforcing additional controls such as including him in targeted security awareness training (Farris, 2022).
 
 ### Q6 – Name of the public S3 bucket
 
@@ -219,27 +175,20 @@ This username records the exact IAM user that made the S3 bucket public to AllUs
 
 frothlywebcode
 
-**b) Description**
+**b) Explanation**
 
-This question uses AWS CloudTrail logs to identify the name of the S3 bucket that Bud made publicly accessible. CloudTrail records each change with an eventID, user, time, and request parameters (Amazon.com, 2025). For a SOC, identifying the bucket name is key to understanding what changed, if anyone altered it, and what level of access was granted.
-
-**c) Method used**
-
-Expansion of the requestParameters from the PutBucketAcl event revealed the name of the S3 bucket that was made publicly accessible.
+Still within the PutBucketAcl event, I expanded requestParameters and located the bucket name in the bucketName field:
 
 ```spl
 index=botsv3 sourcetype="aws:cloudtrail" eventName="PutBucketAcl"
 ```
----
-
-**d) Output**
 
 The expansion clearly shows the S3 bucket name:
 <img width="875" height="597" alt="image" src="https://github.com/user-attachments/assets/a0d254bd-31fd-4e62-8c0b-868540b75484" />
 
-**e) Interpretation**
+---
 
-The bucket name records the exact S3 bucket that was made public to AllUsers. For a SOC analyst, it's an important point because it indicates what asset was affected and allows you to look for any external access in follow-up logs (Farris, 2022). It also emphasizes the need for alerts and safeguards against dangerous ACL modifications.
+The SOC can scope the impact of the misconfiguration by knowing the precise bucket name, including what data might be stored there, which services or applications rely on it, and whether sensitive content could have been accessed by outside parties (Farris, 2022). It also provides focused searches in S3 access logs and configuration baselines so that follow-up inspections and improvements are applied to the correct asset. 
 
 ### Q7 – The text file uploaded to the S3 bucket
 
@@ -247,13 +196,9 @@ The bucket name records the exact S3 bucket that was made public to AllUsers. Fo
 
 OPEN_BUCKET_PLEASE_FIX.txt 
 
-**b) Description**
+**b) Explanation**
 
-This question uses AWS S3 Access logs to identify the text file uploaded to the S3 bucket. After an incident responder escalates the PutBucketAcl event and Bud’s username , the threat hunter can pivot into S3 access logs to see exactly which objects were written while the bucket was public and assess the impact on confidentiality and integrity.
-
-**c) Method used**
-
-I applied the filter below with the S3 bucket name included:
+I applied the filter below to see what was uploaded to the bucket using S3 access logs:
 
 ```spl
 index=botsv3 sourcetype=" aws:s3:accesslogs" frothlywebcode
@@ -262,7 +207,7 @@ index=botsv3 sourcetype=" aws:s3:accesslogs" frothlywebcode
 
 ---
 
-I noticed that the events in the picture above all had request parameters e.g. GET, HEAD, PUT etc. so to isolate the PutObject requests I applied this filter, and it narrowed it down to four events:
+I saw a mix of HTTP operations (GET, HEAD, PUT, etc.), so I filtered PutObject uploads:
 
 ```spl
 index="botsv3" sourcetype="aws:s3:accesslogs" frothlywebcode "REST.PUT.OBJECT"
@@ -271,36 +216,27 @@ index="botsv3" sourcetype="aws:s3:accesslogs" frothlywebcode "REST.PUT.OBJECT"
 
 ---
 
-To find the .txt object, I applied this filter:
+This narrowed the results to four events. To identify the text file specifically, I added a .txt filter:
 ```spl
 index="botsv3" sourcetype="aws:s3:accesslogs" frothlywebcode "REST.PUT.OBJECT" .txt
 ```
 
----
-
-**d) Output**
-
-From the addition of ".txt" to the filtered result, I identified the text file uploaded to the S3 bucket:  
+From the addition of ".txt" to the filtered result, I identified the text file uploaded to the S3 bucket:
 <img width="975" height="412" alt="image" src="https://github.com/user-attachments/assets/e4338c58-d8d5-47a2-a2e4-434c5d225f65" />
 
-**e) Interpretation**
+---
 
-Identifying `OPEN_BUCKET_PLEASE_FIX.txt` shows the direct impact of Bud’s risky S3 ACL change. S3 server access logs' request and object information are correlated with the `PutBucketAcl` event with `REST.PUT.OBJECT` entries in `aws:s3:accesslogs` to verify what was uploaded, when it occurred, and to identify malicious or warning files during the exposure window (Amazon Web Services, 2023).
+For a SOC, identifying OPEN_BUCKET_PLEASE_FIX.txt shows the direct impact of Bud’s risky S3 ACL change. S3 server access logs' request and object information are correlated with the PutBucketAcl event with REST.PUT.OBJECT entries in aws:s3:accesslogs to verify what was uploaded, when it occurred, and to identify malicious or warning files during the exposure window (Amazon Web Services, 2023).
 
-### Q8 – FQDN of the endpoint that is running a different Windows operating system edition
+### Q8 – FQDN of the endpoint with a different Windows edition
 
 **a) Answer**
 
 BSTOLL-L.froth.ly
 
-**b) Description**
+**b) Explanation**
 
-This question uses Windows host inventory data (winhostmon) to compare OS editions across endpoints and find the one workstation whose Windows edition differs from the standard Frothly baseline, identified via its FQDN. In a SOC context, comparing fields such as OS edition and FQDN across all hosts, allows the analyst to quickly spot outliers that may represent unmanaged, misconfigured, or higher-risk machines.
-
-**c) Method used**
-
-I used this filter to start, and it returned 204 events: 
-
+This question identifies a host running a different Windows edition compared to the rest of the estate. I started with:
 ```spl
 index="botsv3" sourcetype="winhostmon" "windows 10"
 ```
@@ -308,12 +244,7 @@ index="botsv3" sourcetype="winhostmon" "windows 10"
 
 ---
 
-I noticed that there were 2 different OSs which are Windows 10 Pro and Windows 10 Enterprise. Most of the events with Microsoft 10 Pro had different host names but Microsoft 10 Enterprise only had one host name:
-<img width="975" height="941" alt="image" src="https://github.com/user-attachments/assets/e69c5b22-d5cf-44ff-b5ed-5240ce9e5b26" />
-
----
-
-So, I used this filter to isolate hosts using Windows 10 Enterprise and looking through the 30 returned events, I confirmed that there was only one host name which is BSTOLL-L:
+This returned 204 events, with two editions present: Windows 10 Pro and Windows 10 Enterprise. To isolate the outlier, I searched for the Enterprise edition:
 ```spl
 index="botsv3" sourcetype="winhostmon" "windows 10 Enterprise"
 ```
@@ -321,7 +252,7 @@ index="botsv3" sourcetype="winhostmon" "windows 10 Enterprise"
 
 ---
 
-To get final confirmation, I used the filter below to see the number of events it would return, and it returned 174 (174+30 = 204):
+Looking through the 30 returned events, I confirmed that there was only one host name consistently appearing which was BSTOLL-L. To get final confirmation, I used the filter below to see the number of events it would return, and it returned 174 (174+30 = 204):
 ```spl
 index="botsv3" sourcetype="winhostmon" "windows 10 Pro"
 ```
@@ -329,22 +260,20 @@ index="botsv3" sourcetype="winhostmon" "windows 10 Pro"
 
 ---
 
-After identifying BSTOLL-L as the only host running Windows 10 Enterprise, I pivoted on that hostname across all data in index=botsv3.
-Using this filter: 
+Finally, I pivoted on BSTOLL-L across all data to retrieve richer system metadata:
 ```spl
 index="botsv3" BSTOLL-L | stats count by sourcetype source
 ```
 <img width="975" height="582" alt="image" src="https://github.com/user-attachments/assets/a187788c-524c-4e57-823b-b778d64b902d" />
 
+---
 
-**d) Output**
-
-After the result of that filter, I pivoted into the cisconvmsysdata source, which contains VM/system metadata including OS edition (ose) and full system names (vsn) and clicking view events showed the FQDN:
+From the cisconvmsysdata source, expanding the event showed the full FQDN: BSTOLL-L.froth.ly.
 <img width="975" height="464" alt="image" src="https://github.com/user-attachments/assets/57e612d1-ecfe-4aae-bf03-f837b0a8f587" />
 
-**e) Interpretation**
+---
 
-Finding BSTOLL-L.froth.ly as the only host with a different Windows edition highlights a non-standard build that may miss expected security controls or policies. In a SOC context, this endpoint should be treated as an exception, investigated, and brought into alignment or given additional monitoring
+This kind of baseline comparison is used to spot non-standard builds that may be missing controls. In a SOC context, this endpoint should be treated as an exception, investigated, and brought into alignment or given additional monitoring.
 
 ## 5. Conclusion, References and Presentation 
 
