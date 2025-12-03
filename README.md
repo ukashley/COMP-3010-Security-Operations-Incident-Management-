@@ -346,6 +346,9 @@ After the result of that filter, I pivoted into the cisconvmsysdata source, whic
 
 Finding BSTOLL-L.froth.ly as the only host with a different Windows edition highlights a non-standard build that may miss expected security controls or policies. In a SOC context, this endpoint should be treated as an exception, investigated, and brought into alignment or given additional monitoring
 
+## 5. Conclusion, References and Presentation 
+
+
 ## References
 1. Vielberth, M., Böhm, F., Fichtinger, I. and Pernul, G., 2020. Security operations center: A systematic study and open challenges. Ieee Access, 8, pp.227756-227779.
 2. docs.aws.amazon.com. (n.d.). CloudTrail log file examples - AWS CloudTrail. [online] Available at: https://docs.aws.amazon.com/awscloudtrail/latest/userguide/cloudtrail-log-file-examples.html.
