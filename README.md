@@ -1,4 +1,6 @@
-# COMP 3010 CW2 Report
+# Coursework 2: BOTSv3 Incident Analysis and Presentation
+<img width="642" height="469" alt="image" src="https://github.com/user-attachments/assets/e3609057-6300-4a39-a3c6-68bc9c1e6d4b" />
+
 ## 1. Introduction
 A Security Operations Centre (SOC) is a collection of personnel, procedures, and tools that can offer a comprehensive solution for identifying and mitigating an attack before any harm is done. As the number and sophistication of cyberattacks increase, SOCs have become essential for gathering security telemetry, triaging alerts, evaluating incidents using threat intelligence, and organizing a successful response (Vielberth et al 2020).
 In this report, the SOC context is explored through the Boss of the SOC v3 (BOTSv3) dataset, a simulated enterprise environment for the fictitious company “Frothly” that provides realistic AWS, endpoint, and network activity that mirrors enterprise operations. Using Splunk to analyze BOTSv3, this investigation models real SOC workflows such as querying CloudTrail logs, identifying misconfigurations and analyzing attacker behavior.
@@ -18,17 +20,17 @@ This investigation assumes the following: The BOTSv3 logs are complete, accurate
 ## 2. SOC Roles & Incident Handling Reflection
 The BOTSv3 dataset is related to and accurately represents the different SOC tiers, their roles and incident handling methods. The typical SOC is divided into three main tiers:
 
-• **Tier 1 (Triage Specialist):** Tier 1 analysts monitor alerts, filter false positives and gather initial context so serious events can be escalated quickly (Vielberth et al. 2020). In BOTSv3, tasks such as listing IAM users accessing AWS services or identifying the processor type on web servers mirror this triage work. CloudTrail and host searches help establish who is involved and which assets are affected, supporting early detection and quick containment decisions.
+**2.1 Tier 1 (Triage Specialist):** Tier 1 analysts monitor alerts, filter false positives and gather initial context so serious events can be escalated quickly (Vielberth et al. 2020). In BOTSv3, tasks such as listing IAM users accessing AWS services or identifying the processor type on web servers mirror this triage work. CloudTrail and host searches help establish who is involved and which assets are affected, supporting early detection and quick containment decisions.
 
-• **Tier 2 (Incident Responder):** Tier 2 analysts handle escalated cases, perform deeper investigation and coordinate containment and incident recovery (Vielberth et al 2020). This appears in questions on identifying the field used to alert on AWS API activity without MFA, tracing the PutBucketAcl event ID and linking it to Bud’s account and bucket. Here, Tier 2 correlates Tier 1 findings into actionable threat intelligence and decides concrete response steps, such as tightening bucket ACLs or enforcing MFA.
+**2.2 Tier 2 (Incident Responder):** Tier 2 analysts handle escalated cases, perform deeper investigation and coordinate containment and incident recovery (Vielberth et al 2020). This appears in questions on identifying the field used to alert on AWS API activity without MFA, tracing the PutBucketAcl event ID and linking it to Bud’s account and bucket. Here, Tier 2 correlates Tier 1 findings into actionable threat intelligence and decides concrete response steps, such as tightening bucket ACLs or enforcing MFA.
 
-• **Tier 3 (Threat Hunter):** Tier 3 analysts proactively hunt for unknown threats and drive long-term prevention. In BOTSv3 they might pivot from the PutBucketAcl event into S3 access logs to see which file was uploaded while the bucket was public and use winhostmon data to spot a host running a different Windows edition as a suspicious outlier. These activities inform hardening and improved detections, though BOTSv3 underrepresents non-technical recovery work such as stakeholder communication and post-incident reviews.
+**2.3 Tier 3 (Threat Hunter):** Tier 3 analysts proactively hunt for unknown threats and drive long-term prevention. In BOTSv3 they might pivot from the PutBucketAcl event into S3 access logs to see which file was uploaded while the bucket was public and use winhostmon data to spot a host running a different Windows edition as a suspicious outlier. These activities inform hardening and improved detections, though BOTSv3 underrepresents non-technical recovery work such as stakeholder communication and post-incident reviews.
 
 ## 3. Installation & Data Preparation 
 
 
 ## 4. Guided Questions
-### Q1 – IAM users that accessed AWS services
+### 4.1 Q1 – IAM users that accessed AWS services
 
 **a) Answer**
 
@@ -63,7 +65,7 @@ web_admin
 
 For a SOC, this is basic identity monitoring: it defines the set of active IAM users in the environment and provides pivots for later investigations. Analysts can baseline each identity’s normal activity and then quickly focus searches (e.g., on these four users when reviewing S3 ACL changes or object uploads), reducing noise and making it easier to spot compromised accounts or misuse of privileges (Akinrolabu et al. 2018). 
 
-### Q2 – Field to alert that AWS API activity occured without MFA
+### 4.2 Q2 – Field to alert that AWS API activity occured without MFA
 
 **a) Answer**
 
@@ -87,7 +89,7 @@ In the Events view, expanding userIdentity > sessionContext > attributes reveals
 
 In a SOC, this field is critical for detection and analysis. It lets analysts distinguish strongly authenticated sessions (true) from higher-risk ones (false). Detection rules can alert on sensitive API calls made without MFA, and incident responders can pivot to “MFA = false” sessions when investigating suspected account compromise or testing whether MFA policies are actually being followed (Agbede 2023).
 
-### Q3 – The processor number used on the web servers
+### 4.3 Q3 – The processor number used on the web servers
 
 **a) Answer**
 
@@ -120,7 +122,7 @@ and saw HTTP traffic with a server header such as Apache/2.2.34 (Amazon), confir
 
 For a SOC, this is important because device identification and tracking in security incidents and forensic investigations can be gotten from identifying the processor number. This unique, factory-assigned identifier aids in distinguishing a specific physical CPU from all others in the same series. Tier 1/2 analysts can pivot on this hardware profile when correlating logs, so investigations stay aligned with the correct physical infrastructure rather than just abstract hostnames.
 
-### Q4 – The event ID of the API call that enabled public access
+### 4.4 Q4 – The event ID of the API call that enabled public access
 
 **a) Answer**
 
@@ -149,7 +151,7 @@ Inspecting the event fields showed the specific eventID associated with Bud’s 
 
 This eventID records the precise change that opened the S3 bucket to the public. For a SOC analyst, it's a crucial point because it indicates when exposure started, who caused it, and allows you to look for any external access in follow-up logs (Farris, 2022). It also emphasizes the need for alerts and safeguards against dangerous ACL modifications.
 
-### Q5 – Bud's Username
+### 4.5 Q5 – Bud's Username
 
 **a) Answer**
 
@@ -169,7 +171,7 @@ The userIdentity.userName field shows that Bud’s IAM username is bstoll:
 
 For incident handling, this ties the risky configuration change directly to an individual account. The SOC can then review bstoll’s recent activity (for example, all CloudTrail events for that user), check whether his access rights are appropriate, and, if needed, adjust permissions. This can also be mitigated by enforcing additional controls such as including him in targeted security awareness training (Farris, 2022).
 
-### Q6 – Name of the public S3 bucket
+### 4.6 Q6 – Name of the public S3 bucket
 
 **a) Answer**
 
@@ -190,7 +192,7 @@ The expansion clearly shows the S3 bucket name:
 
 The SOC can scope the impact of the misconfiguration by knowing the precise bucket name, including what data might be stored there, which services or applications rely on it, and whether sensitive content could have been accessed by outside parties (Farris, 2022). It also provides focused searches in S3 access logs and configuration baselines so that follow-up inspections and improvements are applied to the correct asset. 
 
-### Q7 – The text file uploaded to the S3 bucket
+### 4.7 Q7 – The text file uploaded to the S3 bucket
 
 **a) Answer**
 
@@ -228,7 +230,7 @@ From the addition of ".txt" to the filtered result, I identified the text file u
 
 For a SOC, identifying OPEN_BUCKET_PLEASE_FIX.txt shows the direct impact of Bud’s risky S3 ACL change. S3 server access logs' request and object information are correlated with the PutBucketAcl event with REST.PUT.OBJECT entries in aws:s3:accesslogs to verify what was uploaded, when it occurred, and to identify malicious or warning files during the exposure window (Amazon Web Services, 2023).
 
-### Q8 – FQDN of the endpoint with a different Windows edition
+### 4.8 Q8 – FQDN of the endpoint with a different Windows edition
 
 **a) Answer**
 
@@ -275,10 +277,10 @@ From the cisconvmsysdata source, expanding the event showed the full FQDN: BSTOL
 
 This kind of baseline comparison is used to spot non-standard builds that may be missing controls. In a SOC context, this endpoint should be treated as an exception, investigated, and brought into alignment or given additional monitoring.
 
-## 5. Conclusion, References and Presentation 
+## 5. Conclusion
 
 
-## References
+## 6. References
 1. Vielberth, M., Böhm, F., Fichtinger, I. and Pernul, G., 2020. Security operations center: A systematic study and open challenges. Ieee Access, 8, pp.227756-227779.
 2. docs.aws.amazon.com. (n.d.). CloudTrail log file examples - AWS CloudTrail. [online] Available at: https://docs.aws.amazon.com/awscloudtrail/latest/userguide/cloudtrail-log-file-examples.html.
 3. Akinrolabu, O., Agrafiotis, I. and Erola, A. (2018) 'The challenge of detecting sophisticated attacks: Insights from SOC Analysts'. In Proceedings of the 13th international conference on availability, reliability and security (pp. 1-9).
