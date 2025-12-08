@@ -1,5 +1,6 @@
 # Coursework 2: BOTSv3 Incident Analysis and Presentation
-<img width="642" height="469" alt="image" src="https://github.com/user-attachments/assets/e3609057-6300-4a39-a3c6-68bc9c1e6d4b" />
+## Table of Contents
+<img width="875" height="623" alt="image" src="https://github.com/user-attachments/assets/297430c0-0a21-4450-9c60-b3baa9050997" />
 
 ## 1. Introduction
 A misconfiguration in Frothly’s AWS environment results in a public S3 bucket, an external upload of a warning file, and an endpoint running a different Windows edition from the rest of the estate. This report, intended for a security management audience, uses Splunk and the Boss of the SOC v3 (BOTSv3) dataset to reconstruct the incident from a Security Operations Centre (SOC) perspective, showing how a SOC team could detect, analyze, and learn from it.
