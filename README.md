@@ -4,19 +4,10 @@
 
 ## 1. Introduction
 A misconfiguration in Frothly’s AWS environment results in a public S3 bucket, an external upload of a warning file, and an endpoint running a different Windows edition from the rest of the estate. This report, intended for a security management audience, uses Splunk and the Boss of the SOC v3 (BOTSv3) dataset to reconstruct the incident from a Security Operations Centre (SOC) perspective, showing how a SOC team could detect, analyze, and learn from it.
-A Security Operations Centre (SOC) is a collection of personnel, procedures, and tools that can offer a comprehensive solution for identifying and mitigating an attack before any harm is done [1]. As the number and sophistication of cyberattacks increases, SOCs rely on SIEM platforms such as Splunk to aggregate logs, apply analytics, and support both reactive incident handling and proactive threat hunting. In this report, that SOC context is explored through Frothly’s simulated AWS, endpoint and network activity in BOTSv3.
 
-The objectives of this investigation are:
+A SOC is a collection of personnel, procedures, and tools that detect, investigate and respond to attacks before significant harm occurs [1]. As the number and sophistication of cyberattacks increases, SOCs rely on SIEM platforms such as Splunk to aggregate logs, apply analytics, and support both reactive incident handling and proactive threat hunting. In this report, that SOC context is explored through Frothly’s simulated AWS, endpoint and network activity in BOTSv3.
 
-•	Answering one set of 200-level questions.
-
-•	Reconstructing the incident from a SOC perspective.
-
-•	Reflecting on SOC processes and potential improvements.
-
-The report's scope is restricted to Splunk log analysis of the chosen BOTSv3 scenario and its associated 200-level questions. The focus is on getting information from available logs, developing search filters and relating the findings to SOC processes. A thorough threat-hunting activity, host-based forensics and detailed malware reverse engineering outside of the dataset supplied are all outside the scope.
-
-This investigation assumes the following: The BOTSv3 logs are complete, accurately time-synchronized, and representative of Frothly's environment, that Splunk is the main SIEM platform, and a typical tiered SOC structure is in place. Instead of focusing on compatibility or data quality issues, these assumptions enable the analysis to focus on how a SOC team would understand and act on the available information.
+The objectives are to answer one set of BOTSv3 200-level questions, reconstruct the incident from a SOC perspective and reflect on SOC processes and potential improvements. The scope is limited to Splunk log analysis of the chosen BOTSv3 scenario and its associated 200-level questions. Broader threat hunting, host-based forensics and malware analysis beyond the supplied dataset are out of scope. The analysis assumes BOTSv3 logs are complete and time-synchronized, that Splunk is the main SIEM, and that a typical tiered SOC structure is in place, so the focus stays on how analysts interpret and act on the available information.
 
 ## 2. SOC Roles & Incident Handling Reflection
 The BOTSv3 dataset is related to and accurately represents the different SOC tiers, their roles and incident handling methods. The typical SOC is divided into three main tiers:
@@ -29,6 +20,7 @@ The BOTSv3 dataset is related to and accurately represents the different SOC tie
 
 ## 3. Installation & Data Preparation 
 To replicate a standard SOC deployment where analysts operate their own SIEM stack, Splunk Enterprise was installed on an Ubuntu virtual machine. A local Splunk Enterprise instance was chosen over Splunk Cloud so that indexes, configuration files and system resources could be fully controlled, reflecting how many SOCs run Splunk within their own infrastructure for security and compliance reasons [8]. This also allowed full administrative access for experimenting with BOTSv3 without affecting a shared environment.
+
 The Linux installer version was selected from Splunk and installed via the terminal.
 <img width="975" height="511" alt="image" src="https://github.com/user-attachments/assets/a1432ed6-4d54-43cd-a970-58da52141d44" />
 <img width="975" height="733" alt="image" src="https://github.com/user-attachments/assets/d6e89051-be15-482d-95fc-e921046ac7f1" />
@@ -42,15 +34,17 @@ Once Splunk Web was reachable on port 8000, access was confirmed in a browser by
 <img width="975" height="380" alt="image" src="https://github.com/user-attachments/assets/5ff10371-c2d6-4632-bfc7-ebf5e651b1ee" />
 
 This ensures the core pipeline is working before the platform is relied on for monitoring and alerting.
-On the Ubuntu VM, I downloaded botsv3_data_set.tgz from GitHub into ~/Downloads, extracted it, and copied the botsv3_data_set directory into /opt/splunk/etc/apps with cp -r. 
+
+The VM's CPU and disk were briefly stressed by indexing the entire dataset, simulating the performance and license trade-offs that a real SOC would have to handle. I downloaded botsv3_data_set.tgz from GitHub into ~/Downloads, extracted it, and copied the botsv3_data_set directory into /opt/splunk/etc/apps with cp -r. 
 <img width="975" height="671" alt="image" src="https://github.com/user-attachments/assets/7c6272f2-6de8-45c7-a6a7-0517ce17c6b5" />
 <img width="975" height="722" alt="image" src="https://github.com/user-attachments/assets/93dad4be-52ee-4ee8-8ba3-936cf436156a" />
  
 After confirming the app files, I started Splunk from /opt/splunk/bin so it could load the new content.
 <img width="975" height="684" alt="image" src="https://github.com/user-attachments/assets/c4272590-d1d8-425a-aeca-ecd9a56e8024" />
 
-The app provisions a dedicated botsv3 index and sourcetypes, aligning with SOC practice of isolating datasets for tuning and access control. I then validated ingestion in Search & Reporting with index=botsv3 earliest=0.
+The app provisions a dedicated botsv3 index and sourcetypes, aligning with SOC practice of isolating datasets for tuning and access control. I verified data quality using index=botsv3 earliest=0 and | stats count by sourcetype to confirm expected sourcetypes and time ranges.
 <img width="975" height="518" alt="image" src="https://github.com/user-attachments/assets/9651c10a-e824-480e-a151-57b460222f8b" />
+<img width="975" height="490" alt="image" src="https://github.com/user-attachments/assets/f8f81163-13da-473c-8f6b-928478312933" />
 
 These checks reflect how a SOC would onboard new log sources and confirm they are reliable for investigations and detections [10].
 
