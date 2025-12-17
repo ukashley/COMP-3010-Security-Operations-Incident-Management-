@@ -3,20 +3,23 @@
 <img width="875" height="623" alt="image" src="https://github.com/user-attachments/assets/297430c0-0a21-4450-9c60-b3baa9050997" />
 
 ## 1. Introduction
-A misconfiguration in Frothly’s AWS environment results in a public S3 bucket, an external upload of a warning file, and an endpoint running a different Windows edition from the rest of the estate. This report, intended for a security management audience, uses Splunk and the Boss of the SOC v3 (BOTSv3) dataset to reconstruct the incident from a Security Operations Centre (SOC) perspective, showing how a SOC team could detect, analyze, and learn from it.
+A misconfiguration in Frothly’s AWS environment leads to a public S3 bucket, an external upload of a warning file, and one endpoint running a different Windows edition from the rest of the estate. Using Splunk and the Boss of the SOC v3 (BOTSv3) dataset, this report reconstructs the sequence of events from a Security Operations Centre (SOC) point of view and shows how a SOC team could detect, investigate, and learn from the incident.
 
-A SOC is a collection of personnel, procedures, and tools that detect, investigate and respond to attacks before significant harm occurs [1]. As the number and sophistication of cyberattacks increases, SOCs rely on SIEM platforms such as Splunk to aggregate logs, apply analytics, and support both reactive incident handling and proactive threat hunting. In this report, that SOC context is explored through Frothly’s simulated AWS, endpoint and network activity in BOTSv3.
+A SOC brings together people, processes, and tools to detect, investigate, and respond to attacks before significant harm occurs [1]. By treating BOTSv3 as a timeline reconstruction exercise, the research explains what a SOC would do at each stage by correlating CloudTrail, S3 access logs, and endpoint telemetry to connect identity activity to a bucket ACL modification and connect an external upload to an endpoint configuration anomaly.
 
 The objectives are to answer one set of BOTSv3 200-level questions, reconstruct the incident from a SOC perspective and reflect on SOC processes and potential improvements. The scope is limited to Splunk log analysis of the chosen BOTSv3 scenario and its associated 200-level questions. Broader threat hunting, host-based forensics and malware analysis beyond the supplied dataset are out of scope. The analysis assumes BOTSv3 logs are complete and time-synchronized, that Splunk is the main SIEM, and that a typical tiered SOC structure is in place, so the focus stays on how analysts interpret and act on the available information.
 
 ## 2. SOC Roles & Incident Handling Reflection
-The BOTSv3 dataset is related to and accurately represents the different SOC tiers, their roles and incident handling methods. The typical SOC is divided into three main tiers:
+BOTSv3 reflects how a SOC operates day-to-day. Tier 1 monitors and triages alerts by validating signal fast, removing obvious false positives, capturing initial context and affected assets etc. [1]. Tier 2 investigates and contains by correlating logs, building a timeline, attributing activity to assets, and driving immediate fixes [1]. Tier 3 hunts and improves detection/prevention by turning lessons learned into stronger alert logic, baselines, and guardrails. In BOTSv3, this escalation is mirrored by moving from quick searches to proof and scope, then to hardening and detection tuning.
 
-**2.1 Tier 1 (Triage Specialist):** Tier 1 analysts monitor alerts, filter false positives and gather initial context so serious events can be escalated quickly [1]. In BOTSv3, tasks such as listing IAM users accessing AWS services or identifying the processor type on web servers mirror this triage work. CloudTrail and host searches help establish who is involved and which assets are affected, supporting early detection and quick containment decisions.
+This aligns with the incident handling lifecycle:
+**Prevention:** enforce MFA for sensitive AWS actions, apply least privilege, and use S3 guardrails (e.g. Block Public Access / prevent public ACLs). 
 
-**2.2 Tier 2 (Incident Responder):** Tier 2 analysts handle escalated cases, correlate evidence and coordinate containment and recovery [1]. In this exercise, work such as identifying the field used to alert on AWS API activity without MFA, tracing the PutBucketAcl event ID and linking it to Bud’s account and bucket. Here, Tier 2 correlates Tier 1 findings into actionable threat intelligence and decides concrete response steps, such as tightening bucket ACLs or enforcing MFA. BOTSv3 captures the analytical aspects of this role but not the operational overheads.
+**Detection:** alert on high-risk CloudTrail/S3 patterns like sensitive actions without MFA, public access/ACL changes, unusual uploads/access and flag endpoint build drift via baselining.
 
-**2.3 Tier 3 (Threat Hunter):** Tier 3 analysts proactively hunt for unknown threats and drive long-term prevention. In BOTSv3 they might pivot from the PutBucketAcl event into S3 access logs to see which file was uploaded while the bucket was public and use winhostmon data to spot a host running a different Windows edition as a suspicious outlier. These activities inform hardening and improved detections, though BOTSv3 underrepresents non-technical recovery work such as stakeholder communication and post-incident reviews.
+**Reaction:** confirm the key change event, attribute it, scope affected data/assets, and contain by removing risky access [12].
+
+**Recovery:** verify secure configuration is restored, tighten/repair IAM permissions and remediate non-standard endpoints, updating SOC runbooks and escalation criteria [12].
 
 ## 3. Installation & Data Preparation 
 To replicate a standard SOC deployment where analysts operate their own SIEM stack, Splunk Enterprise was installed on an Ubuntu virtual machine. A local Splunk Enterprise instance was chosen over Splunk Cloud so that indexes, configuration files and system resources could be fully controlled, reflecting how many SOCs run Splunk within their own infrastructure for security and compliance reasons [8]. This also allowed full administrative access for experimenting with BOTSv3 without affecting a shared environment.
@@ -323,3 +326,5 @@ The necessity of ongoing monitoring of MFA status, S3 ACL modifications, and obj
 [10] A. Madani, S. Rezayi and H. Gharaee, "Log management comprehensive architecture in Security Operation Center (SOC)," In 2011 International Conference on Computational Aspects of Social Networks (CASoN), pp. 284-289, 2011. 
 
 [11] 	T. K.A, S. M.I.H, C. F and M. C, "Continuous auditing and threat detection in multi-cloud infrastructure," Computers & Security, vol. 102, pp. 1-26, 2021. 
+
+[12]  M. Saraiva and M.M.V, "CyberSoc Incident Response Management Framework," Masters thesis, 2024.
