@@ -3,7 +3,7 @@
 <img width="875" height="623" alt="image" src="https://github.com/user-attachments/assets/297430c0-0a21-4450-9c60-b3baa9050997" />
 
 ## 1. Introduction
-A misconfiguration in Frothly’s AWS environment leads to a public S3 bucket, an external upload of a warning file, and one endpoint running a different Windows edition from the rest of the estate. Using Splunk and the Boss of the SOC v3 (BOTSv3) dataset, this report reconstructs the sequence of events from a Security Operations Centre (SOC) point of view and shows how a SOC team could detect, investigate, and learn from the incident.
+A misconfiguration in Frothly’s AWS environment leads to a public S3 bucket, an external upload of a warning file, and one endpoint running a different Windows edition from the rest of the estate. Using Splunk and the Boss of the SOC v3 (BOTSv3) dataset, this report, intended for a security management audience, reconstructs the sequence of events from a Security Operations Centre (SOC) point of view and shows how a SOC team could detect, investigate, and learn from the incident.
 
 A SOC brings together people, processes, and tools to detect, investigate, and respond to attacks before significant harm occurs [1]. By treating BOTSv3 as a timeline reconstruction exercise, the research explains what a SOC would do at each stage by correlating CloudTrail, S3 access logs, and endpoint telemetry to connect identity activity to a bucket ACL modification and connect an external upload to an endpoint configuration anomaly.
 
@@ -21,6 +21,8 @@ This aligns with the incident handling lifecycle:
 
 **Recovery:** verify secure configuration is restored, tighten/repair IAM permissions and remediate non-standard endpoints, updating SOC runbooks and escalation criteria [12].
 
+BOTSv3 highlights a practical limitation of real SOC operations because analysts often work with incomplete context and noisy data. Effective escalation therefore depends on clear handovers between tiers and well-defined alert thresholds. While BOTSv3 provides rich telemetry, real environments frequently suffer from logging gaps, reinforcing that SOC effectiveness relies as much on logging strategy and detection engineering as on analyst capability [13].
+
 ## 3. Installation & Data Preparation 
 To replicate a standard SOC deployment where analysts operate their own SIEM stack, Splunk Enterprise was installed on an Ubuntu virtual machine. A local Splunk Enterprise instance was chosen over Splunk Cloud so that indexes, configuration files and system resources could be fully controlled, reflecting how many SOCs run Splunk within their own infrastructure for security and compliance reasons [8]. This also allowed full administrative access for experimenting with BOTSv3 without affecting a shared environment.
 
@@ -33,19 +35,19 @@ After installation, the service was started from /opt/splunk/bin using sudo ./sp
  
 This aligns with SOC practice, where SIEM administration is restricted to a small number of privileged identities to reduce the risk of unauthorized access [9].
 
-Once Splunk Web was reachable on port 8000, access was confirmed in a browser by logging in as the Administrator user and viewing the Splunk Enterprise home page and default dashboards. 
+After startup, I validated the deployment the way a SOC would validate a new log onboarding by checking if Splunk service is healthy, that the botsv3 app loaded, and data is present in the intended index/sourcetypes
 <img width="975" height="380" alt="image" src="https://github.com/user-attachments/assets/5ff10371-c2d6-4632-bfc7-ebf5e651b1ee" />
 
-This ensures the core pipeline is working before the platform is relied on for monitoring and alerting.
+This matters because any missing sourcetype would invalidate later detection and incident reconstruction.
 
-The VM's CPU and disk were briefly stressed by indexing the entire dataset, simulating the performance and license trade-offs that a real SOC would have to handle. I downloaded botsv3_data_set.tgz from GitHub into ~/Downloads, extracted it, and copied the botsv3_data_set directory into /opt/splunk/etc/apps with cp -r. 
+I downloaded botsv3_data_set.tgz from GitHub into ~/Downloads, extracted it, and copied the botsv3_data_set directory into /opt/splunk/etc/apps with cp -r. 
 <img width="975" height="671" alt="image" src="https://github.com/user-attachments/assets/7c6272f2-6de8-45c7-a6a7-0517ce17c6b5" />
 <img width="975" height="722" alt="image" src="https://github.com/user-attachments/assets/93dad4be-52ee-4ee8-8ba3-936cf436156a" />
  
 After confirming the app files, I started Splunk from /opt/splunk/bin so it could load the new content.
 <img width="975" height="684" alt="image" src="https://github.com/user-attachments/assets/c4272590-d1d8-425a-aeca-ecd9a56e8024" />
 
-The app provisions a dedicated botsv3 index and sourcetypes, aligning with SOC practice of isolating datasets for tuning and access control. I verified data quality using index=botsv3 earliest=0 and | stats count by sourcetype to confirm expected sourcetypes and time ranges.
+The app provisions a dedicated botsv3 index and sourcetypes, aligning with SOC practice of isolating datasets for tuning and access control. I verified ingestion by confirming events exist in index=botsv3, expected sourcetypes populate, and timestamps span the scenario window, so later queries aren’t answering from partial data.
 <img width="975" height="518" alt="image" src="https://github.com/user-attachments/assets/9651c10a-e824-480e-a151-57b460222f8b" />
 <img width="975" height="490" alt="image" src="https://github.com/user-attachments/assets/f8f81163-13da-473c-8f6b-928478312933" />
 
@@ -63,16 +65,14 @@ bstoll,btun,splunk_access,web_admin
 The AWS documentation shows that the IAM user who performed an action is stored in the userIdentity.userName field when userIdentity.type="IAMUser" [2]. 
 <img width="975" height="379" alt="image" src="https://github.com/user-attachments/assets/22fc0b4f-7081-4f26-bd6b-eeadd4212920" />
 
-To identify which IAM users generated AWS API events, I queried the CloudTrail data:
+I filtered to IAMUser events and extracted unique values of userIdentity.userName to list every IAM identity that generated AWS API activity in the dataset.
 
 ```spl
 index=botsv3 sourcetype="aws:cloudtrail"
 | stats values(userIdentity.userName) AS iam_users
 ```
 
-This returned four IAM users: two that appear to be human users (bstoll, btun), one likely service account (splunk_access), and one shared/privileged account (web_admin).
-
----
+This provides a baseline of active identities for later pivots and ensures searches can be focused (e.g. reviewing S3 ACL changes or object uploads), reducing noise and making it easier to spot compromised accounts or misuse of privileges [3].
 
 ```text
 bstoll
@@ -84,8 +84,6 @@ web_admin
 <img width="975" height="376" alt="image" src="https://github.com/user-attachments/assets/1ea03715-7cd8-4c46-911e-1271704392c6" />
 
 ---
-
-For a SOC, this is basic identity monitoring because it defines the set of active IAM users in the dataset and provides pivots for later investigations. Analysts can baseline each identity’s normal activity and then quickly focus searches (e.g., reviewing S3 ACL changes or object uploads), reducing noise and making it easier to spot compromised accounts or misuse of privileges [3]. 
 
 ### 4.2 Q2 – Field to alert that AWS API activity occured without MFA
 
@@ -222,7 +220,7 @@ OPEN_BUCKET_PLEASE_FIX.txt
 
 **b) Explanation**
 
-I applied the filter below to see what was uploaded to the bucket using S3 access logs:
+After identifying the exposed bucket in CloudTrail, I pivoted to sourcetype=aws:s3:accesslogs 
 
 ```spl
 index=botsv3 sourcetype=" aws:s3:accesslogs" frothlywebcode
@@ -231,7 +229,7 @@ index=botsv3 sourcetype=" aws:s3:accesslogs" frothlywebcode
 
 ---
 
-I saw a mix of HTTP operations (GET, HEAD, PUT, etc.), so I filtered PutObject uploads:
+I saw a mix of HTTP operations, so I filtered to successful uploads by looking for REST.PUT.OBJECT with a 200 HTTP status code, scoped to the affected bucket:
 
 ```spl
 index="botsv3" sourcetype="aws:s3:accesslogs" frothlywebcode "REST.PUT.OBJECT"
@@ -240,12 +238,12 @@ index="botsv3" sourcetype="aws:s3:accesslogs" frothlywebcode "REST.PUT.OBJECT"
 
 ---
 
-This narrowed the results to four events. To identify the text file specifically, I added a .txt filter:
+This narrowed the results to four events. I then restricted results to objects ending in .txt to find the exact text file:
 ```spl
 index="botsv3" sourcetype="aws:s3:accesslogs" frothlywebcode "REST.PUT.OBJECT" .txt
 ```
 
-From the addition of ".txt" to the filtered result, I identified the text file uploaded to the S3 bucket:
+This shows the text file successfully uploaded during the public exposure window was OPEN_BUCKET_PLEASE_FIX.txt.
 <img width="975" height="412" alt="image" src="https://github.com/user-attachments/assets/e4338c58-d8d5-47a2-a2e4-434c5d225f65" />
 
 ---
@@ -302,7 +300,7 @@ This kind of baseline comparison is used to spot non-standard builds that may be
 ## 5. Conclusion
 This investigation traced a realistic cloud misconfiguration incident from initial IAM activity to S3 exposure and endpoint anomalies using Splunk and the BOTSv3 dataset. It showed how IAM usage patterns, risky changes such as Bud’s public S3 ACL on frothlywebcode, the upload of OPEN_BUCKET_PLEASE_FIX.txt, and outlier hosts like BSTOLL-L.froth.ly collectively provide the context needed for scoping impact, attributing actions and prioritizing response.
 
-The necessity of ongoing monitoring of MFA status, S3 ACL modifications, and object uploads supported by baseline-driven detection across endpoints and identities in Splunk are important lessons for the SOC [11]. Strategically, this means adding proactive threat hunting over CloudTrail and host telemetry, enhancing correlation searches using fields like userIdentity.sessionContext.attributes.mfaAuthenticated, and strengthening cloud guardrails for automated prevention of public buckets. Together, these improvements would shorten detection and response times and enhance the SOC’s resilience.
+The SOC takeaways are to treat non-MFA API activity as high signal for identity compromise, alert immediately on public S3 ACL changes and object uploads during exposure windows, and use endpoint baselining to flag non-standard builds for rapid triage [11]. Strategically, this means adding proactive threat hunting over CloudTrail and host telemetry, enhancing correlation searches using fields like userIdentity.sessionContext.attributes.mfaAuthenticated, and strengthening cloud guardrails for automated prevention of public buckets. Together, these improvements would shorten detection and response times and enhance the SOC’s resilience.
 
 ## 6. References
 [1] 	V. M, B. F, F. I and P. G, "Security operations center: A systematic study and open challenges," IEEE, vol. VIII, pp. 227756-227779, 2020. 
