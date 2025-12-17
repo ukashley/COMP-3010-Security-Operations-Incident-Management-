@@ -326,3 +326,5 @@ The SOC takeaways are to treat non-MFA API activity as high signal for identity 
 [11] 	T. K.A, S. M.I.H, C. F and M. C, "Continuous auditing and threat detection in multi-cloud infrastructure," Computers & Security, vol. 102, pp. 1-26, 2021. 
 
 [12]  M. Saraiva and M.M.V, "CyberSoc Incident Response Management Framework," Masters thesis, 2024.
+
+[13] P. Cichonski, T. Millar, T. Grance, and K. Scarfone, "Computer Security Incident Handling Guide (NIST SP 800-61 Rev. 2)." National Institute of Standards and Technology, 2012.
