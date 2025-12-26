@@ -1,6 +1,6 @@
 # Coursework 2: BOTSv3 Incident Analysis and Presentation
 ## Table of Contents
-<img width="875" height="623" alt="image" src="https://github.com/user-attachments/assets/297430c0-0a21-4450-9c60-b3baa9050997" />
+<img width="975" height="704" alt="image" src="https://github.com/user-attachments/assets/de27b8ab-ff30-4ed1-b949-cf6a828b6bb0" />
 
 ## 1. Introduction
 A misconfiguration in Frothly’s AWS environment leads to a public S3 bucket, an external upload of a warning file, and one endpoint running a different Windows edition from the rest of the estate. Using Splunk and the Boss of the SOC v3 (BOTSv3) dataset, this report, intended for a security management audience, reconstructs the sequence of events from a Security Operations Centre (SOC) point of view and shows how a SOC team could detect, investigate, and learn from the incident.
@@ -10,18 +10,43 @@ A SOC brings together people, processes, and tools to detect, investigate, and r
 The objectives are to answer one set of BOTSv3 200-level questions, reconstruct the incident from a SOC perspective and reflect on SOC processes and potential improvements. The scope is limited to Splunk log analysis of the chosen BOTSv3 scenario and its associated 200-level questions. Broader threat hunting, host-based forensics and malware analysis beyond the supplied dataset are out of scope. The analysis assumes BOTSv3 logs are complete and time-synchronized, that Splunk is the main SIEM, and that a typical tiered SOC structure is in place, so the focus stays on how analysts interpret and act on the available information.
 
 ## 2. SOC Roles & Incident Handling Reflection
-BOTSv3 reflects how a SOC operates day-to-day. Tier 1 monitors and triages alerts by validating signal fast, removing obvious false positives, capturing initial context and affected assets etc. [1]. Tier 2 investigates and contains by correlating logs, building a timeline, attributing activity to assets, and driving immediate fixes [1]. Tier 3 hunts and improves detection/prevention by turning lessons learned into stronger alert logic, baselines, and guardrails. In BOTSv3, this escalation is mirrored by moving from quick searches to proof and scope, then to hardening and detection tuning.
+A tiered SOC model maps cleanly to this incident, but tiers are best understood as responsibility boundaries. This should be treated as high-confidence, high-severity because public S3 exposure plus successful external writes is rarely benign, and the earliest reliable signal is the CloudTrail control-plane change.
 
-This aligns with the incident handling lifecycle:
-**Prevention:** enforce MFA for sensitive AWS actions, apply least privilege, and use S3 guardrails (e.g. Block Public Access / prevent public ACLs). 
+• Tier 1 (triage): validate alert fidelity, capture core fields, and decide severity/escalation [1].
 
-**Detection:** alert on high-risk CloudTrail/S3 patterns like sensitive actions without MFA, public access/ACL changes, unusual uploads/access and flag endpoint build drift via baselining.
+• Tier 2 (investigation): build the timeline, scope impact, recommend containment, and document findings [1].
 
-**Reaction:** anchor the incident on the PutBucketAcl change (eventID + bucketName), confirm actor context (sourceIPAddress, userAgent, mfaAuthenticated), then pivot into S3 access logs to confirm REST.PUT.OBJECT activity during the exposure window and remove public access immediately [12].
+• Tier 3 (engineering): improve detections and guardrails, and drive lessons learned to reduce recurrence.
 
-**Recovery:** re-enable S3 guardrails (Block Public Access), rotate/verify the IAM identity, and bring the outlier endpoint back into compliance; update the runbook so future public ACL changes auto-trigger the same pivots and escalation [12].
+**Tier 1 triage:** In an ideal situation, Tier 1 should generate a handover report with the minimal fields required to scope and contain the exposure in less than half an hour. Missing required fields during handover will slow Tier 2 containment.
 
-BOTSv3 highlights a practical limitation of real SOC operations because analysts often work with incomplete context and noisy data. Effective escalation therefore depends on clear handovers between tiers and well-defined alert thresholds. While BOTSv3 provides rich telemetry, real environments frequently suffer from logging gaps, reinforcing that SOC effectiveness relies as much on logging strategy and detection engineering as on analyst capability [13].
+•	Trigger: AllUsers access is introduced by PutBucketAcl.
+
+•	Asset: requestParameters.bucketName
+
+•	Actor: userIdentity.userName, sourceIPAddress, userAgent, and mfaAuthenticated.
+
+•	Impact hint: did any HTML methods succeed after the change?
+
+•	Decision: If external writes are noticed or public access is introduced, escalate right away.
+
+**Tier 2 investigation:** Tier 2 should anchor the exposure window on the CloudTrail eventID and pivot into S3 access logs to determine what was written/read, from where, and when. Containment should be decisive:
+
+•	Remove public ACL/policy and enable S3 Block Public Access [12].
+
+•	Lock down object writes (e.g. temporary bucket policy deny) until scope is complete.
+
+•	Rotate credentials and review the IAM user’s recent activity to rule out compromise.
+
+Tier 2 should also document if server access logging is incomplete as the impact may be undercounted.
+
+**Tier 3 engineering:** This incident is preventable. Tier 3 should translate findings into controls and automation:
+
+•	Preventive guardrails: Service Control Policies (SCPs) that deny public ACL/policy changes except via an approved role.
+
+•	Detection engineering: Correlation searches for risky S3 permission changes with automatic pivots to post-change PUT/GET activity.
+
+•	Playbooks: a standard S3 exposure runbook with containment steps, evidence fields, and clear containment actions [12].
 
 ## 3. Installation & Data Preparation 
 To replicate a standard SOC deployment where analysts operate their own SIEM stack, Splunk Enterprise was installed on an Ubuntu virtual machine. A local Splunk Enterprise instance was chosen over Splunk Cloud so that indexes, configuration files and system resources could be fully controlled, reflecting how many SOCs run Splunk within their own infrastructure for security and compliance reasons [8]. This also allowed full administrative access for experimenting with BOTSv3 without affecting a shared environment.
@@ -73,6 +98,7 @@ I filtered to IAMUser events and extracted unique values of userIdentity.userNam
 index=botsv3 sourcetype="aws:cloudtrail"
 | stats values(userIdentity.userName) AS iam_users
 ```
+<img width="975" height="376" alt="image" src="https://github.com/user-attachments/assets/1ea03715-7cd8-4c46-911e-1271704392c6" />
 
 This provides a baseline of active identities for later pivots and ensures searches can be focused (e.g. reviewing S3 ACL changes or object uploads), reducing noise and making it easier to spot compromised accounts or misuse of privileges [3].
 
@@ -82,9 +108,6 @@ btun
 splunk_access
 web_admin
 ```
-
-<img width="975" height="376" alt="image" src="https://github.com/user-attachments/assets/1ea03715-7cd8-4c46-911e-1271704392c6" />
-
 ---
 
 ### 4.2 Q2 – Field to alert that AWS API activity occured without MFA
@@ -298,6 +321,9 @@ From the cisconvmsysdata source, expanding the event showed the full FQDN: BSTOL
 ---
 
 This kind of baseline comparison is used to spot non-standard builds that may be missing controls. In a SOC context, this endpoint should be treated as an exception, investigated, and brought into alignment or given additional monitoring.
+
+### 4.9 Incident Timeline 
+<img width="1028" height="409" alt="image" src="https://github.com/user-attachments/assets/edd3e2f5-1533-4205-950e-079564faa049" />
 
 ## 5. Conclusion
 This investigation traced a realistic cloud misconfiguration incident from initial IAM activity to S3 exposure and endpoint anomalies using Splunk and the BOTSv3 dataset. It showed how IAM usage patterns, risky changes such as Bud’s public S3 ACL on frothlywebcode, the upload of OPEN_BUCKET_PLEASE_FIX.txt, and outlier hosts like BSTOLL-L.froth.ly collectively provide the context needed for scoping impact, attributing actions and prioritizing response.
