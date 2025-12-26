@@ -1,5 +1,4 @@
 # Coursework 2: BOTSv3 Incident Analysis and Presentation
-## Table of Contents
 <img width="975" height="704" alt="image" src="https://github.com/user-attachments/assets/de27b8ab-ff30-4ed1-b949-cf6a828b6bb0" />
 
 ## 1. Introduction
@@ -26,7 +25,7 @@ A tiered SOC model maps cleanly to this incident, but tiers are best understood 
 
 •	Actor: userIdentity.userName, sourceIPAddress, userAgent, and mfaAuthenticated.
 
-•	Impact hint: did any HTML methods succeed after the change?
+•	Impact hint: did any REST/HTML operations succeed after the change?
 
 •	Decision: If external writes are noticed or public access is introduced, escalate right away.
 
@@ -323,7 +322,10 @@ From the cisconvmsysdata source, expanding the event showed the full FQDN: BSTOL
 This kind of baseline comparison is used to spot non-standard builds that may be missing controls. In a SOC context, this endpoint should be treated as an exception, investigated, and brought into alignment or given additional monitoring.
 
 ### 4.9 Incident Timeline 
-<img width="1028" height="409" alt="image" src="https://github.com/user-attachments/assets/edd3e2f5-1533-4205-950e-079564faa049" />
+<img width="1031" height="408" alt="image" src="https://github.com/user-attachments/assets/1a1cbc79-13e8-46c4-a60a-b861b58f1be9" />
+   <p align="center">
+ <b>Fig: Incident timeline anchored on CloudTrail PutBucketAcl and S3 access-log timestamps.</b>
+</p>
 
 ## 5. Conclusion
 This investigation traced a realistic cloud misconfiguration incident from initial IAM activity to S3 exposure and endpoint anomalies using Splunk and the BOTSv3 dataset. It showed how IAM usage patterns, risky changes such as Bud’s public S3 ACL on frothlywebcode, the upload of OPEN_BUCKET_PLEASE_FIX.txt, and outlier hosts like BSTOLL-L.froth.ly collectively provide the context needed for scoping impact, attributing actions and prioritizing response.
