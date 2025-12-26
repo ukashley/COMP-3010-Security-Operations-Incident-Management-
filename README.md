@@ -17,16 +17,16 @@ This aligns with the incident handling lifecycle:
 
 **Detection:** alert on high-risk CloudTrail/S3 patterns like sensitive actions without MFA, public access/ACL changes, unusual uploads/access and flag endpoint build drift via baselining.
 
-**Reaction:** confirm the key change event, attribute it, scope affected data/assets, and contain by removing risky access [12].
+**Reaction:** anchor the incident on the PutBucketAcl change (eventID + bucketName), confirm actor context (sourceIPAddress, userAgent, mfaAuthenticated), then pivot into S3 access logs to confirm REST.PUT.OBJECT activity during the exposure window and remove public access immediately [12].
 
-**Recovery:** verify secure configuration is restored, tighten/repair IAM permissions and remediate non-standard endpoints, updating SOC runbooks and escalation criteria [12].
+**Recovery:** re-enable S3 guardrails (Block Public Access), rotate/verify the IAM identity, and bring the outlier endpoint back into compliance; update the runbook so future public ACL changes auto-trigger the same pivots and escalation [12].
 
 BOTSv3 highlights a practical limitation of real SOC operations because analysts often work with incomplete context and noisy data. Effective escalation therefore depends on clear handovers between tiers and well-defined alert thresholds. While BOTSv3 provides rich telemetry, real environments frequently suffer from logging gaps, reinforcing that SOC effectiveness relies as much on logging strategy and detection engineering as on analyst capability [13].
 
 ## 3. Installation & Data Preparation 
 To replicate a standard SOC deployment where analysts operate their own SIEM stack, Splunk Enterprise was installed on an Ubuntu virtual machine. A local Splunk Enterprise instance was chosen over Splunk Cloud so that indexes, configuration files and system resources could be fully controlled, reflecting how many SOCs run Splunk within their own infrastructure for security and compliance reasons [8]. This also allowed full administrative access for experimenting with BOTSv3 without affecting a shared environment.
 
-The Linux installer version was selected from Splunk and installed via the terminal.
+I installed Splunk Enterprise on Ubuntu via the CLI to mirror common SOC deployments and to keep full control of indexes and parsing settings during investigation
 <img width="975" height="511" alt="image" src="https://github.com/user-attachments/assets/a1432ed6-4d54-43cd-a970-58da52141d44" />
 <img width="975" height="733" alt="image" src="https://github.com/user-attachments/assets/d6e89051-be15-482d-95fc-e921046ac7f1" />
 
@@ -54,6 +54,8 @@ The app provisions a dedicated botsv3 index and sourcetypes, aligning with SOC p
 These checks reflect how a SOC would onboard new log sources and confirm they are reliable for investigations and detections [10].
 
 ## 4. Guided Questions
+Each question includes the answer and how I arrived at it, the SPL and result (as a screenshot), and a brief SOC interpretation.
+
 ### 4.1 Q1 – IAM users that accessed AWS services
 
 **a) Answer**
