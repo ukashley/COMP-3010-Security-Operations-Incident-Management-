@@ -322,6 +322,8 @@ From the cisconvmsysdata source, expanding the event showed the full FQDN: BSTOL
 This kind of baseline comparison is used to spot non-standard builds that may be missing controls. In a SOC context, this endpoint should be treated as an exception, investigated, and brought into alignment or given additional monitoring.
 
 ### 4.9 Incident Timeline 
+<img width="636" height="362" alt="image" src="https://github.com/user-attachments/assets/2aa3d264-6c6a-40df-9e54-f04f1b9e724c" />
+
 <img width="1031" height="408" alt="image" src="https://github.com/user-attachments/assets/1a1cbc79-13e8-46c4-a60a-b861b58f1be9" />
    <p align="center">
  <b>Fig: Incident timeline anchored on CloudTrail PutBucketAcl and S3 access-log timestamps.</b>
